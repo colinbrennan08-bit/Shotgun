@@ -47,6 +47,15 @@ export type Trip = {
    */
   departStart: string;
   departEnd: string;
+  /**
+   * The return leg, running destination back to origin, or null for a one-way.
+   *
+   * A round trip is one post rather than two because that is how the poster
+   * thinks about it ("down Friday, back Sunday"), and because a rider who wants
+   * both legs should not have to find two separate listings and hope they match.
+   */
+  returnStart: string | null;
+  returnEnd: string | null;
   /** Seats available. Always null on a request. */
   seats: number | null;
   /** Suggested gas split in whole dollars. Never collected in-app. */

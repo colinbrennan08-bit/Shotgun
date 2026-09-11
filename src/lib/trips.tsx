@@ -6,7 +6,7 @@ import { useSession } from './session';
 import { getItem, setItem } from './storage';
 import type { Trip, TripDraft, TripKind } from './types';
 
-const TRIPS_KEY = 'shotgun.trips.v2';
+const TRIPS_KEY = 'shotgun.trips.v3';
 const JOINS_KEY = 'shotgun.joins.v1';
 
 /**
@@ -18,11 +18,19 @@ const JOINS_KEY = 'shotgun.joins.v1';
  * TODO(backend): this whole module is the seam. Swapping in Supabase means
  * replacing the body of the provider with queries; the hook's surface stays put.
  */
-type Seed = Omit<Trip, 'id' | 'schoolId' | 'createdAt' | 'departStart' | 'departEnd'> & {
+type Seed = Omit<
+  Trip,
+  'id' | 'schoolId' | 'createdAt' | 'departStart' | 'departEnd' | 'returnStart' | 'returnEnd'
+> & {
   startInDays: number;
   startTime: string;
   endInDays: number;
   endTime: string;
+  /** Present only on round trips. */
+  backStartInDays?: number;
+  backStartTime?: string;
+  backEndInDays?: number;
+  backEndTime?: string;
 };
 
 function seedTrips(): Trip[] {
@@ -54,6 +62,10 @@ function seedTrips(): Trip[] {
       startTime: '06:00',
       endInDays: 3,
       endTime: '08:00',
+      backStartInDays: 5,
+      backStartTime: '18:00',
+      backEndInDays: 5,
+      backEndTime: '21:00',
       seats: 2,
       costShare: 35,
       notes: 'Driving up for the weekend, coming back Sunday night if anyone needs a round trip.',
@@ -96,6 +108,10 @@ function seedTrips(): Trip[] {
       startTime: '08:00',
       endInDays: 10,
       endTime: '12:00',
+      backStartInDays: 13,
+      backStartTime: '09:00',
+      backEndInDays: 14,
+      backEndTime: '17:00',
       seats: 3,
       costShare: 45,
       notes: 'Long haul but I do it every few weeks. Splitting gas four ways makes it cheap.',
@@ -117,13 +133,21 @@ function seedTrips(): Trip[] {
   ];
 
   return base.map((seed, index) => {
-    const { startInDays, startTime, endInDays, endTime, ...rest } = seed;
+    const {
+      startInDays, startTime, endInDays, endTime,
+      backStartInDays, backStartTime, backEndInDays, backEndTime,
+      ...rest
+    } = seed;
+    const roundTrip =
+      backStartInDays !== undefined && backStartTime && backEndInDays !== undefined && backEndTime;
     return {
       ...rest,
       id: `seed-${index + 1}`,
       schoolId: LAUNCH_SCHOOL_ID,
       departStart: makeDateTime(addDays(today, startInDays), startTime),
       departEnd: makeDateTime(addDays(today, endInDays), endTime),
+      returnStart: roundTrip ? makeDateTime(addDays(today, backStartInDays), backStartTime) : null,
+      returnEnd: roundTrip ? makeDateTime(addDays(today, backEndInDays), backEndTime) : null,
       createdAt: now,
     };
   });
@@ -202,12 +226,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     return all.filter((trip) => trip.schoolId === profile.schoolId);
   }, [all, profile]);
 
-  // A trip stays on the board until the END of its window: someone leaving
-  // "Saturday through Monday" is still worth finding on Sunday.
+  // A trip stays on the board until the END of its last window: someone leaving
+  // "Saturday through Monday" is still worth finding on Sunday, and a round trip
+  // is still worth finding by someone who only wants the ride back.
   const trips = useMemo(
     () =>
       schoolTrips
-        .filter((trip) => !isPast(trip.departEnd))
+        .filter((trip) => !isPast(trip.returnEnd ?? trip.departEnd))
         .sort((a, b) => a.departStart.localeCompare(b.departStart)),
     [schoolTrips]
   );

@@ -32,6 +32,7 @@ export function KindBadge({ kind }: { kind: Trip['kind'] }) {
 
 export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void }) {
   const theme = useTheme();
+  const roundTrip = trip.returnStart !== null && trip.returnEnd !== null;
 
   const details = [
     trip.seats !== null ? `${trip.seats} ${trip.seats === 1 ? 'seat' : 'seats'}` : null,
@@ -51,7 +52,16 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
         },
       ]}>
       <View style={styles.header}>
-        <KindBadge kind={trip.kind} />
+        <View style={styles.badges}>
+          <KindBadge kind={trip.kind} />
+          {roundTrip ? (
+            <View style={[styles.badge, { borderWidth: 1, borderColor: theme.border }]}>
+              <ThemedText type="small" themeColor="textSecondary" style={styles.badgeText}>
+                Round trip
+              </ThemedText>
+            </View>
+          ) : null}
+        </View>
         <ThemedText type="small" themeColor="textSecondary">
           {formatRelativeDay(dateOf(trip.departStart))}
         </ThemedText>
@@ -63,6 +73,12 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
         kind={trip.kind}
         meta={formatDepartRange(trip.departStart, trip.departEnd)}
       />
+
+      {roundTrip ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          Back: {formatDepartRange(trip.returnStart!, trip.returnEnd!)}
+        </ThemedText>
+      ) : null}
 
       {details.length > 0 ? (
         <ThemedText type="small" themeColor="textSecondary">
@@ -96,9 +112,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: Spacing.two,
   },
+  badges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
   badge: {
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Radius.pill,
+  },
+  badgeText: {
+    fontWeight: '700',
   },
 });

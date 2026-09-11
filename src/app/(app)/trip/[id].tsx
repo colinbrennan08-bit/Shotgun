@@ -48,6 +48,7 @@ export default function TripDetailScreen() {
 
   const mine = trip.authorId === profile.id;
   const joined = hasJoined(trip.id);
+  const roundTrip = trip.returnStart !== null && trip.returnEnd !== null;
   const contact: Contact | null = mine
     ? { method: profile.contactMethod, handle: profile.contactHandle }
     : seedContact(trip.authorId);
@@ -69,6 +70,11 @@ export default function TripDetailScreen() {
       <Screen>
         <View style={styles.header}>
           <KindBadge kind={trip.kind} />
+          {roundTrip ? (
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Heading out
+            </ThemedText>
+          ) : null}
           <RouteLine
             origin={trip.origin}
             destination={trip.destination}
@@ -76,6 +82,20 @@ export default function TripDetailScreen() {
             meta={`${formatDepartRange(trip.departStart, trip.departEnd)}  ·  ${formatRelativeDay(dateOf(trip.departStart))}`}
           />
         </View>
+
+        {roundTrip ? (
+          <View style={styles.section}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Heading back
+            </ThemedText>
+            <RouteLine
+              origin={trip.destination}
+              destination={trip.origin}
+              kind={trip.kind}
+              meta={`${formatDepartRange(trip.returnStart!, trip.returnEnd!)}  ·  ${formatRelativeDay(dateOf(trip.returnStart!))}`}
+            />
+          </View>
+        ) : null}
 
         <View style={[styles.facts, { backgroundColor: theme.backgroundElement }]}>
           {facts.map((fact) => (
