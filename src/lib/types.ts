@@ -11,9 +11,6 @@ export type TripKind = 'offer' | 'request';
 
 export type ContactMethod = 'phone' | 'instagram' | 'snapchat';
 
-/** Rough departure time. Exact times are unrealistic this far out, so we bucket. */
-export type DepartWindow = 'early' | 'morning' | 'afternoon' | 'evening' | 'flexible';
-
 export type School = {
   id: string;
   name: string;
@@ -40,9 +37,16 @@ export type Trip = {
   authorName: string;
   origin: string;
   destination: string;
-  /** ISO calendar date, `YYYY-MM-DD`. */
-  departDate: string;
-  departWindow: DepartWindow;
+  /**
+   * The departure window, as local `YYYY-MM-DDTHH:mm` datetimes.
+   *
+   * Trips are rarely pinned to a minute. "Anytime Saturday morning through Monday
+   * afternoon" is how people actually plan a trip home, and a range is what makes
+   * a driver and a rider with loose plans findable to each other. Set both to the
+   * same value for a fixed departure.
+   */
+  departStart: string;
+  departEnd: string;
   /** Seats available. Always null on a request. */
   seats: number | null;
   /** Suggested gas split in whole dollars. Never collected in-app. */
@@ -58,20 +62,8 @@ export type TripDraft = Omit<
   'id' | 'schoolId' | 'authorId' | 'authorName' | 'createdAt'
 >;
 
-export const DEPART_WINDOWS: { value: DepartWindow; label: string }[] = [
-  { value: 'early', label: 'Before 8am' },
-  { value: 'morning', label: 'Morning' },
-  { value: 'afternoon', label: 'Afternoon' },
-  { value: 'evening', label: 'Evening' },
-  { value: 'flexible', label: 'Flexible' },
-];
-
 export const CONTACT_METHODS: { value: ContactMethod; label: string; hint: string }[] = [
   { value: 'phone', label: 'Phone', hint: '(805) 555-0134' },
   { value: 'instagram', label: 'Instagram', hint: 'yourhandle' },
   { value: 'snapchat', label: 'Snapchat', hint: 'yourusername' },
 ];
-
-export function departWindowLabel(window: DepartWindow): string {
-  return DEPART_WINDOWS.find((w) => w.value === window)?.label ?? 'Flexible';
-}

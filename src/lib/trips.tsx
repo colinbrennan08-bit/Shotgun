@@ -1,12 +1,12 @@
 import { createContext, use, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
-import { addDays, isPast, todayISO } from './dates';
+import { addDays, isPast, makeDateTime, todayISO } from './dates';
 import { LAUNCH_SCHOOL_ID } from './schools';
 import { useSession } from './session';
 import { getItem, setItem } from './storage';
 import type { Trip, TripDraft, TripKind } from './types';
 
-const TRIPS_KEY = 'shotgun.trips.v1';
+const TRIPS_KEY = 'shotgun.trips.v2';
 const JOINS_KEY = 'shotgun.joins.v1';
 
 /**
@@ -18,18 +18,28 @@ const JOINS_KEY = 'shotgun.joins.v1';
  * TODO(backend): this whole module is the seam. Swapping in Supabase means
  * replacing the body of the provider with queries; the hook's surface stays put.
  */
+type Seed = Omit<Trip, 'id' | 'schoolId' | 'createdAt' | 'departStart' | 'departEnd'> & {
+  startInDays: number;
+  startTime: string;
+  endInDays: number;
+  endTime: string;
+};
+
 function seedTrips(): Trip[] {
   const now = new Date().toISOString();
-  const base: (Omit<Trip, 'id' | 'schoolId' | 'createdAt'> & { inDays: number })[] = [
+  const today = todayISO();
+
+  const base: Seed[] = [
     {
       kind: 'offer',
       authorId: 'seed-1',
       authorName: 'Maya R.',
       origin: 'San Luis Obispo',
       destination: 'Los Angeles',
-      inDays: 2,
-      departDate: '',
-      departWindow: 'afternoon',
+      startInDays: 2,
+      startTime: '14:00',
+      endInDays: 2,
+      endTime: '17:00',
       seats: 3,
       costShare: 30,
       notes: 'Leaving from the Grand Ave lot. Can drop anywhere off the 101 or in Sherman Oaks.',
@@ -40,9 +50,10 @@ function seedTrips(): Trip[] {
       authorName: 'Devon K.',
       origin: 'San Luis Obispo',
       destination: 'San Jose',
-      inDays: 3,
-      departDate: '',
-      departWindow: 'early',
+      startInDays: 3,
+      startTime: '06:00',
+      endInDays: 3,
+      endTime: '08:00',
       seats: 2,
       costShare: 35,
       notes: 'Driving up for the weekend, coming back Sunday night if anyone needs a round trip.',
@@ -53,12 +64,13 @@ function seedTrips(): Trip[] {
       authorName: 'Priya S.',
       origin: 'San Luis Obispo',
       destination: 'Orange County',
-      inDays: 4,
-      departDate: '',
-      departWindow: 'flexible',
+      startInDays: 4,
+      startTime: '09:00',
+      endInDays: 6,
+      endTime: '18:00',
       seats: null,
       costShare: 40,
-      notes: 'Anywhere near Irvine works, happy to chip in for gas and drive part of the way.',
+      notes: 'Anywhere near Irvine works. Totally flexible on the day, happy to chip in for gas.',
     },
     {
       kind: 'offer',
@@ -66,9 +78,10 @@ function seedTrips(): Trip[] {
       authorName: 'Tyler M.',
       origin: 'Los Angeles',
       destination: 'San Luis Obispo',
-      inDays: 5,
-      departDate: '',
-      departWindow: 'evening',
+      startInDays: 5,
+      startTime: '17:00',
+      endInDays: 5,
+      endTime: '20:00',
       seats: 1,
       costShare: 30,
       notes: 'Coming back up Sunday evening. One seat, small bag only, trunk is full.',
@@ -79,9 +92,10 @@ function seedTrips(): Trip[] {
       authorName: 'Jordan B.',
       origin: 'San Luis Obispo',
       destination: 'Sacramento',
-      inDays: 9,
-      departDate: '',
-      departWindow: 'morning',
+      startInDays: 9,
+      startTime: '08:00',
+      endInDays: 10,
+      endTime: '12:00',
       seats: 3,
       costShare: 45,
       notes: 'Long haul but I do it every few weeks. Splitting gas four ways makes it cheap.',
@@ -92,22 +106,24 @@ function seedTrips(): Trip[] {
       authorName: 'Sam O.',
       origin: 'San Luis Obispo',
       destination: 'Fresno',
-      inDays: 11,
-      departDate: '',
-      departWindow: 'afternoon',
+      startInDays: 11,
+      startTime: '10:00',
+      endInDays: 12,
+      endTime: '16:00',
       seats: null,
       costShare: null,
       notes: 'Flying out of FAT, need to be there by 4pm. Flexible on the day before too.',
     },
   ];
 
-  return base.map((trip, index) => {
-    const { inDays, ...rest } = trip;
+  return base.map((seed, index) => {
+    const { startInDays, startTime, endInDays, endTime, ...rest } = seed;
     return {
       ...rest,
       id: `seed-${index + 1}`,
       schoolId: LAUNCH_SCHOOL_ID,
-      departDate: addDays(todayISO(), inDays),
+      departStart: makeDateTime(addDays(today, startInDays), startTime),
+      departEnd: makeDateTime(addDays(today, endInDays), endTime),
       createdAt: now,
     };
   });
@@ -116,7 +132,7 @@ function seedTrips(): Trip[] {
 type TripsValue = {
   /** Upcoming trips at the signed-in user's school, soonest first. */
   trips: Trip[];
-  /** Just this user's posts, including ones whose date has passed. */
+  /** Just this user's posts, including ones whose window has passed. */
   myTrips: Trip[];
   /** Other people's trips this user has asked to join. */
   joinedTrips: Trip[];
@@ -186,11 +202,13 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     return all.filter((trip) => trip.schoolId === profile.schoolId);
   }, [all, profile]);
 
+  // A trip stays on the board until the END of its window: someone leaving
+  // "Saturday through Monday" is still worth finding on Sunday.
   const trips = useMemo(
     () =>
       schoolTrips
-        .filter((trip) => !isPast(trip.departDate))
-        .sort((a, b) => a.departDate.localeCompare(b.departDate)),
+        .filter((trip) => !isPast(trip.departEnd))
+        .sort((a, b) => a.departStart.localeCompare(b.departStart)),
     [schoolTrips]
   );
 
@@ -198,8 +216,16 @@ export function TripsProvider({ children }: { children: ReactNode }) {
     if (!profile) return [];
     return schoolTrips
       .filter((trip) => trip.authorId === profile.id)
-      .sort((a, b) => a.departDate.localeCompare(b.departDate));
+      .sort((a, b) => a.departStart.localeCompare(b.departStart));
   }, [schoolTrips, profile]);
+
+  const joinedTrips = useMemo(
+    () =>
+      schoolTrips
+        .filter((trip) => joins.includes(trip.id))
+        .sort((a, b) => a.departStart.localeCompare(b.departStart)),
+    [schoolTrips, joins]
+  );
 
   const getTrip = useCallback(
     (id: string) => schoolTrips.find((trip) => trip.id === id),
@@ -232,14 +258,6 @@ export function TripsProvider({ children }: { children: ReactNode }) {
       await persistTrips(all.filter((trip) => !(trip.id === id && trip.authorId === profile.id)));
     },
     [profile, all, persistTrips]
-  );
-
-  const joinedTrips = useMemo(
-    () =>
-      schoolTrips
-        .filter((trip) => joins.includes(trip.id))
-        .sort((a, b) => a.departDate.localeCompare(b.departDate)),
-    [schoolTrips, joins]
   );
 
   const hasJoined = useCallback((id: string) => joins.includes(id), [joins]);

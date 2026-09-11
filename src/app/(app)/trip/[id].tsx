@@ -8,11 +8,10 @@ import { KindBadge } from '@/components/trip-card';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDate, formatRelativeDay } from '@/lib/dates';
+import { dateOf, formatDepartRange, formatRelativeDay } from '@/lib/dates';
 import { contactLabel, formatHandle, seedContact, type Contact } from '@/lib/directory';
 import { useSession } from '@/lib/session';
 import { useTrips } from '@/lib/trips';
-import { departWindowLabel } from '@/lib/types';
 
 /** Works on web too, where Alert.alert is a no-op and confirm() is not. */
 function confirmAction(title: string, message: string, onConfirm: () => void) {
@@ -74,7 +73,7 @@ export default function TripDetailScreen() {
             origin={trip.origin}
             destination={trip.destination}
             kind={trip.kind}
-            meta={`${formatDate(trip.departDate)} · ${formatRelativeDay(trip.departDate)} · ${departWindowLabel(trip.departWindow)}`}
+            meta={`${formatDepartRange(trip.departStart, trip.departEnd)}  ·  ${formatRelativeDay(dateOf(trip.departStart))}`}
           />
         </View>
 

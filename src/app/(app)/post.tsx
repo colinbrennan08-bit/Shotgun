@@ -1,16 +1,25 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { Button } from '@/components/ui/button';
+import { ChipStrip } from '@/components/ui/chip-strip';
 import { Field } from '@/components/ui/field';
 import { Segmented } from '@/components/ui/segmented';
 import { MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { addDays, formatDate, todayISO } from '@/lib/dates';
+import {
+  TIME_OPTIONS,
+  addDays,
+  formatDate,
+  formatDepartRange,
+  formatTime,
+  makeDateTime,
+  todayISO,
+} from '@/lib/dates';
 import { useTrips } from '@/lib/trips';
-import { DEPART_WINDOWS, type DepartWindow, type TripKind } from '@/lib/types';
+import type { TripKind } from '@/lib/types';
 
 const KINDS: { value: TripKind; label: string }[] = [
   { value: 'offer', label: 'I am driving' },
@@ -19,35 +28,70 @@ const KINDS: { value: TripKind; label: string }[] = [
 
 const SEATS = [1, 2, 3, 4, 5, 6];
 
-/** Three weeks of chips. Trips this far out cover every case short of a break. */
+/** Three weeks of chips. Covers everything short of planning a whole term ahead. */
 const DAY_COUNT = 21;
+
+const TIME_CHIPS = TIME_OPTIONS.map((value) => ({ value, label: formatTime(value) }));
 
 export default function PostScreen() {
   const theme = useTheme();
   const router = useRouter();
   const { addTrip } = useTrips();
 
+  const today = todayISO();
+
   const [kind, setKind] = useState<TripKind>('offer');
   const [origin, setOrigin] = useState('San Luis Obispo');
   const [destination, setDestination] = useState('');
-  const [departDate, setDepartDate] = useState(todayISO());
-  const [departWindow, setDepartWindow] = useState<DepartWindow>('flexible');
+  const [startDate, setStartDate] = useState(today);
+  const [startTime, setStartTime] = useState('09:00');
+  const [endDate, setEndDate] = useState(today);
+  const [endTime, setEndTime] = useState('17:00');
   const [seats, setSeats] = useState(2);
   const [costShare, setCostShare] = useState('');
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const days = useMemo(() => {
-    const start = todayISO();
-    return Array.from({ length: DAY_COUNT }, (_, index) => addDays(start, index));
-  }, []);
+  const startDays = useMemo(
+    () =>
+      Array.from({ length: DAY_COUNT }, (_, index) => {
+        const date = addDays(today, index);
+        return { value: date, label: formatDate(date) };
+      }),
+    [today]
+  );
+
+  // The latest departure can't be before the earliest, so this strip starts there.
+  const endDays = useMemo(
+    () =>
+      Array.from({ length: DAY_COUNT }, (_, index) => {
+        const date = addDays(startDate, index);
+        return { value: date, label: formatDate(date) };
+      }),
+    [startDate]
+  );
+
+  const departStart = makeDateTime(startDate, startTime);
+  const departEnd = makeDateTime(endDate, endTime);
+
+  /** Keep the end from drifting behind the start when the start moves. */
+  function handleStartDate(next: string) {
+    setStartDate(next);
+    if (endDate < next) setEndDate(next);
+  }
+
+  function handleStartTime(next: string) {
+    setStartTime(next);
+    if (endDate === startDate && endTime < next) setEndTime(next);
+  }
 
   const errors = {
     origin: origin.trim().length === 0 ? 'Where are you leaving from?' : undefined,
     destination: destination.trim().length === 0 ? 'Where are you going?' : undefined,
+    window: departEnd < departStart ? 'The latest time cannot be before the earliest.' : undefined,
   };
-  const valid = !errors.origin && !errors.destination;
+  const valid = !errors.origin && !errors.destination && !errors.window;
 
   async function handleSubmit() {
     setSubmitted(true);
@@ -59,8 +103,8 @@ export default function PostScreen() {
       kind,
       origin: origin.trim(),
       destination: destination.trim(),
-      departDate,
-      departWindow,
+      departStart,
+      departEnd,
       seats: kind === 'offer' ? seats : null,
       costShare: Number.isFinite(parsedCost) && parsedCost > 0 ? parsedCost : null,
       notes: notes.trim(),
@@ -96,48 +140,45 @@ export default function PostScreen() {
           error={submitted ? errors.destination : undefined}
         />
 
-        <View style={styles.section}>
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            Date
-          </ThemedText>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayStrip}>
-            {days.map((day) => {
-              const selected = day === departDate;
-              return (
-                <Pressable
-                  key={day}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected }}
-                  onPress={() => setDepartDate(day)}
-                  style={[
-                    styles.dayChip,
-                    {
-                      backgroundColor: selected ? theme.tint : theme.backgroundElement,
-                      borderColor: theme.border,
-                    },
-                  ]}>
-                  <ThemedText
-                    type="small"
-                    style={{
-                      color: selected ? theme.onTint : theme.text,
-                      fontWeight: selected ? '700' : '500',
-                    }}>
-                    {formatDate(day)}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
+        <View style={styles.window}>
+          <View style={styles.windowHeader}>
+            <ThemedText style={styles.sectionTitle}>Departure window</ThemedText>
+            <ThemedText type="small" themeColor="textSecondary">
+              The earliest and latest you could leave. Set them the same if your time is fixed.
+              A wider window is easier to match.
+            </ThemedText>
+          </View>
 
-        <View style={styles.section}>
-          <ThemedText type="smallBold" themeColor="textSecondary">
-            Leaving
-          </ThemedText>
-          <Segmented options={DEPART_WINDOWS} value={departWindow} onChange={setDepartWindow} />
+          <View style={styles.picker}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Earliest
+            </ThemedText>
+            <ChipStrip options={startDays} value={startDate} onChange={handleStartDate} />
+            <ChipStrip options={TIME_CHIPS} value={startTime} onChange={handleStartTime} />
+          </View>
+
+          <View style={styles.picker}>
+            <ThemedText type="smallBold" themeColor="textSecondary">
+              Latest
+            </ThemedText>
+            <ChipStrip options={endDays} value={endDate} onChange={setEndDate} />
+            <ChipStrip options={TIME_CHIPS} value={endTime} onChange={setEndTime} />
+          </View>
+
+          <View
+            style={[
+              styles.summary,
+              {
+                backgroundColor: errors.window ? 'transparent' : theme.backgroundElement,
+                borderColor: errors.window ? theme.danger : 'transparent',
+              },
+            ]}>
+            <ThemedText
+              type="smallBold"
+              style={errors.window ? { color: theme.danger } : undefined}>
+              {errors.window ?? formatDepartRange(departStart, departEnd)}
+            </ThemedText>
+          </View>
         </View>
 
         {kind === 'offer' ? (
@@ -164,7 +205,7 @@ export default function PostScreen() {
         />
 
         <Field
-          label="Notes"
+          label="Description"
           value={notes}
           onChangeText={setNotes}
           placeholder="Where you can pick up and drop off, luggage space, anything else."
@@ -172,6 +213,7 @@ export default function PostScreen() {
           numberOfLines={4}
           style={styles.notes}
           autoCapitalize="sentences"
+          hint="Optional, but a line or two gets you a lot more replies."
         />
 
         <Button
@@ -201,16 +243,25 @@ const styles = StyleSheet.create({
   section: {
     gap: Spacing.two,
   },
-  dayStrip: {
-    gap: Spacing.two,
-    paddingRight: Spacing.three,
+  window: {
+    gap: Spacing.three,
   },
-  dayChip: {
+  windowHeader: {
+    gap: Spacing.one,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  picker: {
+    gap: Spacing.two,
+  },
+  summary: {
     minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: Spacing.three,
     borderRadius: Radius.medium,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
   },
   notes: {
     minHeight: 104,

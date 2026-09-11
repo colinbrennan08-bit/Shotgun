@@ -4,8 +4,8 @@ import { RouteLine } from '@/components/route-line';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { formatDate, formatRelativeDay } from '@/lib/dates';
-import { departWindowLabel, type Trip } from '@/lib/types';
+import { dateOf, formatDepartRange, formatRelativeDay } from '@/lib/dates';
+import type { Trip } from '@/lib/types';
 
 export function KindBadge({ kind }: { kind: Trip['kind'] }) {
   const theme = useTheme();
@@ -34,7 +34,6 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
   const theme = useTheme();
 
   const details = [
-    departWindowLabel(trip.departWindow),
     trip.seats !== null ? `${trip.seats} ${trip.seats === 1 ? 'seat' : 'seats'}` : null,
     trip.costShare !== null ? `$${trip.costShare} gas` : null,
   ].filter(Boolean) as string[];
@@ -54,7 +53,7 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
       <View style={styles.header}>
         <KindBadge kind={trip.kind} />
         <ThemedText type="small" themeColor="textSecondary">
-          {formatRelativeDay(trip.departDate)}
+          {formatRelativeDay(dateOf(trip.departStart))}
         </ThemedText>
       </View>
 
@@ -62,8 +61,14 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
         origin={trip.origin}
         destination={trip.destination}
         kind={trip.kind}
-        meta={`${formatDate(trip.departDate)} · ${details.join(' · ')}`}
+        meta={formatDepartRange(trip.departStart, trip.departEnd)}
       />
+
+      {details.length > 0 ? (
+        <ThemedText type="small" themeColor="textSecondary">
+          {details.join(' · ')}
+        </ThemedText>
+      ) : null}
 
       {trip.notes ? (
         <ThemedText type="small" numberOfLines={2} themeColor="textSecondary">

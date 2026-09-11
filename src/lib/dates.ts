@@ -1,9 +1,14 @@
 /**
- * Calendar-date helpers. Trips are dated, not timestamped, so everything here
- * works in `YYYY-MM-DD` strings and local time.
+ * Date and time helpers.
  *
- * `new Date('2026-11-21')` parses as UTC midnight, which in California renders as
- * Nov 20. Every function below builds dates field-by-field to avoid that.
+ * Two string shapes are used throughout:
+ *   - a calendar date, `YYYY-MM-DD`
+ *   - a local datetime, `YYYY-MM-DDTHH:mm` (no zone, no seconds)
+ *
+ * Both are deliberately zone-free. A trip leaving at 8am leaves at 8am wherever
+ * the phone is, and `new Date('2026-11-21')` parses as UTC midnight, which in
+ * California renders as Nov 20. Everything below builds dates field-by-field so
+ * that never happens.
  */
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -11,6 +16,8 @@ const MONTH_NAMES = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ];
+
+// ---------------------------------------------------------------- calendar dates
 
 /** Parse `YYYY-MM-DD` into a local-midnight Date. Returns null if malformed. */
 export function parseISODate(iso: string): Date | null {
@@ -48,10 +55,6 @@ export function daysFromToday(iso: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-export function isPast(iso: string): boolean {
-  return daysFromToday(iso) < 0;
-}
-
 /** `Fri Nov 21` */
 export function formatDate(iso: string): string {
   const date = parseISODate(iso);
@@ -69,6 +72,73 @@ export function formatRelativeDay(iso: string): string {
   return formatDate(iso);
 }
 
-export function isValidISODate(iso: string): boolean {
-  return parseISODate(iso) !== null;
+// -------------------------------------------------------------- local datetimes
+
+/** The `YYYY-MM-DD` half of a local datetime. */
+export function dateOf(dateTime: string): string {
+  return dateTime.slice(0, 10);
 }
+
+/** The `HH:mm` half of a local datetime. */
+export function timeOf(dateTime: string): string {
+  return dateTime.slice(11, 16);
+}
+
+export function makeDateTime(date: string, time: string): string {
+  return `${date}T${time}`;
+}
+
+export function parseISODateTime(dateTime: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(dateTime);
+  if (!match) return null;
+  const [, y, mo, d, h, mi] = match;
+  if (Number(h) > 23 || Number(mi) > 59) return null;
+  const base = parseISODate(`${y}-${mo}-${d}`);
+  if (!base) return null;
+  base.setHours(Number(h), Number(mi), 0, 0);
+  return base;
+}
+
+export function isValidDateTime(dateTime: string): boolean {
+  return parseISODateTime(dateTime) !== null;
+}
+
+/** True once the moment has gone by. Used to drop finished trips from the feed. */
+export function isPast(dateTime: string): boolean {
+  const parsed = parseISODateTime(dateTime);
+  if (!parsed) return false;
+  return parsed.getTime() < Date.now();
+}
+
+/** `8 AM`, `8:30 AM`, `12 PM`. Minutes are dropped when they're zero. */
+export function formatTime(time: string): string {
+  const [rawHour, rawMinute] = time.split(':');
+  const hour = Number(rawHour);
+  const minute = Number(rawMinute);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return time;
+
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const display = hour % 12 === 0 ? 12 : hour % 12;
+  return minute === 0 ? `${display} ${suffix}` : `${display}:${String(minute).padStart(2, '0')} ${suffix}`;
+}
+
+/**
+ * Render a departure window the way someone would say it out loud:
+ *   exact        `Fri Sep 11, 8 AM`
+ *   same day     `Fri Sep 11, 8 AM to 3 PM`
+ *   across days  `Sat Aug 1, 8 AM to Tue Aug 4, 3 PM`
+ */
+export function formatDepartRange(start: string, end: string): string {
+  const startDate = dateOf(start);
+  const endDate = dateOf(end);
+  const startLabel = `${formatDate(startDate)}, ${formatTime(timeOf(start))}`;
+
+  if (start === end) return startLabel;
+  if (startDate === endDate) return `${startLabel} to ${formatTime(timeOf(end))}`;
+  return `${startLabel} to ${formatDate(endDate)}, ${formatTime(timeOf(end))}`;
+}
+
+/** Hour-granularity options for the departure pickers. */
+export const TIME_OPTIONS: string[] = Array.from({ length: 19 }, (_, index) =>
+  `${String(index + 5).padStart(2, '0')}:00`
+);
