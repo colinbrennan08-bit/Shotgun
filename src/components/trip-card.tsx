@@ -15,7 +15,11 @@ export function KindBadge({ kind }: { kind: Trip['kind'] }) {
     <View
       style={[
         styles.badge,
-        { backgroundColor: offering ? theme.offerSurface : theme.requestSurface },
+        {
+          backgroundColor: offering ? theme.offerSurface : theme.requestSurface,
+          borderWidth: offering ? 0 : 1,
+          borderColor: offering ? 'transparent' : theme.request,
+        },
       ]}>
       <ThemedText
         type="small"

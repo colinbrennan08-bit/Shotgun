@@ -3,8 +3,11 @@
  *
  * The base greys came with the Expo template. The additions below are Shotgun's:
  * a green accent doing double duty as the brand colour and as the "Driving" hue,
- * plus a blue for "Needs a ride" so the two kinds of post stay separable at a
- * glance without reading the badge.
+ * plus a lighter green for "Needs a ride".
+ *
+ * Two greens only read as deliberate if something other than hue separates them,
+ * so the badges also differ in treatment: Driving is filled, Needs a ride is
+ * outlined. Both text colours clear 4.5:1 on their own surface.
  */
 
 import '@/global.css';
@@ -23,8 +26,8 @@ export const Colors = {
     onTint: '#ffffff',
     offer: '#1D6F42',
     offerSurface: '#E7F3EC',
-    request: '#2B5CA8',
-    requestSurface: '#E6EDF8',
+    request: '#2F7A55',
+    requestSurface: '#F2FAF6',
     danger: '#B3261E',
   },
   dark: {
@@ -38,8 +41,8 @@ export const Colors = {
     onTint: '#0B1F14',
     offer: '#6FD79B',
     offerSurface: '#14251B',
-    request: '#8FB6F0',
-    requestSurface: '#141D2B',
+    request: '#8FE0B4',
+    requestSurface: '#132A1E',
     danger: '#F2837C',
   },
 } as const;
