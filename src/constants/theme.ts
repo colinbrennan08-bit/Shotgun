@@ -2,9 +2,9 @@
  * App colors for light and dark mode.
  *
  * The base greys came with the Expo template. The additions below are Shotgun's:
- * an amber accent (road-trip warm, and not the default blue every student app
- * ships with), plus distinct hues for the two kinds of post so the feed is
- * scannable without reading labels.
+ * a green accent doing double duty as the brand colour and as the "Driving" hue,
+ * plus a blue for "Needs a ride" so the two kinds of post stay separable at a
+ * glance without reading the badge.
  */
 
 import '@/global.css';
@@ -19,7 +19,7 @@ export const Colors = {
     backgroundSelected: '#E0E1E6',
     textSecondary: '#60646C',
     border: '#DDDEE3',
-    tint: '#B4530B',
+    tint: '#1D6F42',
     onTint: '#ffffff',
     offer: '#1D6F42',
     offerSurface: '#E7F3EC',
@@ -34,8 +34,8 @@ export const Colors = {
     backgroundSelected: '#2E3135',
     textSecondary: '#B0B4BA',
     border: '#33353A',
-    tint: '#FFA45C',
-    onTint: '#1A1207',
+    tint: '#6FD79B',
+    onTint: '#0B1F14',
     offer: '#6FD79B',
     offerSurface: '#14251B',
     request: '#8FB6F0',
