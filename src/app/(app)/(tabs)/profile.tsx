@@ -45,7 +45,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <Screen inTabs contentStyle={{ paddingBottom: BottomTabInset + Spacing.five }}>
+    <Screen contentStyle={{ paddingBottom: BottomTabInset + Spacing.five }}>
       <ThemedText style={styles.title}>Profile</ThemedText>
 
       <View style={[styles.identity, { backgroundColor: theme.backgroundElement }]}>

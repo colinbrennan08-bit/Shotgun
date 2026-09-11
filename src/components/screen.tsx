@@ -2,15 +2,13 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MaxContentWidth, Spacing, TopTabInset } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
 type ScreenProps = {
   children: ReactNode;
   /** Wrap content in a ScrollView. Turn off for screens that own a FlatList. */
   scroll?: boolean;
-  /** Set on the three tab screens so content clears the web tab bar. */
-  inTabs?: boolean;
   contentStyle?: ViewStyle;
 };
 
@@ -18,10 +16,10 @@ type ScreenProps = {
  * Page chrome: themed background, safe-area padding, and a max width so the web
  * build doesn't stretch a column of cards across a 27-inch monitor.
  */
-export function Screen({ children, scroll = true, inTabs = false, contentStyle }: ScreenProps) {
+export function Screen({ children, scroll = true, contentStyle }: ScreenProps) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const paddingTop = insets.top + (inTabs ? TopTabInset : 0) + Spacing.three;
+  const paddingTop = insets.top + Spacing.three;
 
   const inner = (
     <View style={[styles.column, { paddingTop }, contentStyle]}>{children}</View>

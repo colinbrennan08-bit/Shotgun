@@ -19,7 +19,7 @@ export default function TripsScreen() {
   const nothingYet = myTrips.length === 0 && joinedTrips.length === 0;
 
   return (
-    <Screen inTabs contentStyle={{ paddingBottom: BottomTabInset + Spacing.five }}>
+    <Screen contentStyle={{ paddingBottom: BottomTabInset + Spacing.five }}>
       <ThemedText style={styles.title}>Trips</ThemedText>
 
       {nothingYet ? (

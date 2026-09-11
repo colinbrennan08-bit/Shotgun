@@ -88,12 +88,6 @@ export const Radius = {
   pill: 999,
 } as const;
 
-export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-
-/**
- * On web, NativeTabs renders a `position: fixed` bar across the top of the page,
- * so tab content has to start below it. On iOS and Android the tabs sit at the
- * bottom instead and this is zero.
- */
-export const TopTabInset = Platform.OS === 'web' ? 64 : 0;
+/** Height to keep clear at the bottom of a tab screen so the tab bar never covers content. */
+export const BottomTabInset = Platform.select({ ios: 50, android: 80, web: 64 }) ?? 0;
 export const MaxContentWidth = 800;

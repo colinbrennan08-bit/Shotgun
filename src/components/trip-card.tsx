@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { RouteLine } from '@/components/route-line';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -53,13 +54,12 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
         </ThemedText>
       </View>
 
-      <ThemedText style={styles.route}>
-        {trip.origin} → {trip.destination}
-      </ThemedText>
-
-      <ThemedText type="small" themeColor="textSecondary">
-        {formatDate(trip.departDate)} · {details.join(' · ')}
-      </ThemedText>
+      <RouteLine
+        origin={trip.origin}
+        destination={trip.destination}
+        kind={trip.kind}
+        meta={`${formatDate(trip.departDate)} · ${details.join(' · ')}`}
+      />
 
       {trip.notes ? (
         <ThemedText type="small" numberOfLines={2} themeColor="textSecondary">
@@ -91,10 +91,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.two,
     paddingVertical: Spacing.half,
     borderRadius: Radius.pill,
-  },
-  route: {
-    fontSize: 18,
-    fontWeight: '700',
-    lineHeight: 24,
   },
 });

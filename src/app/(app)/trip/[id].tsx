@@ -3,6 +3,7 @@ import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
+import { RouteLine } from '@/components/route-line';
 import { KindBadge } from '@/components/trip-card';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
@@ -52,9 +53,8 @@ export default function TripDetailScreen() {
     ? { method: profile.contactMethod, handle: profile.contactHandle }
     : seedContact(trip.authorId);
 
+  // Date and departure window live on the route graphic, so they are not repeated here.
   const facts = [
-    { label: 'Date', value: `${formatDate(trip.departDate)} · ${formatRelativeDay(trip.departDate)}` },
-    { label: 'Leaving', value: departWindowLabel(trip.departWindow) },
     trip.seats !== null
       ? { label: 'Seats', value: `${trip.seats} ${trip.seats === 1 ? 'seat' : 'seats'}` }
       : null,
@@ -70,9 +70,12 @@ export default function TripDetailScreen() {
       <Screen>
         <View style={styles.header}>
           <KindBadge kind={trip.kind} />
-          <ThemedText style={styles.route}>
-            {trip.origin} → {trip.destination}
-          </ThemedText>
+          <RouteLine
+            origin={trip.origin}
+            destination={trip.destination}
+            kind={trip.kind}
+            meta={`${formatDate(trip.departDate)} · ${formatRelativeDay(trip.departDate)} · ${departWindowLabel(trip.departWindow)}`}
+          />
         </View>
 
         <View style={[styles.facts, { backgroundColor: theme.backgroundElement }]}>
@@ -99,7 +102,7 @@ export default function TripDetailScreen() {
           <View style={styles.section}>
             <ThemedText type="small" themeColor="textSecondary">
               This is your post. Anyone at your school who asks to join will see your{' '}
-              {contactLabel(trip.kind === 'offer' ? profile.contactMethod : profile.contactMethod)}.
+              {contactLabel(profile.contactMethod)}.
             </ThemedText>
             <Button
               label="Delete this post"
@@ -166,7 +169,7 @@ export default function TripDetailScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    gap: Spacing.two,
+    gap: Spacing.three,
     alignItems: 'flex-start',
   },
   route: {

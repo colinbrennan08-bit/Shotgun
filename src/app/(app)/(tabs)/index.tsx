@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { TripCard } from '@/components/trip-card';
 import { Segmented } from '@/components/ui/segmented';
-import { BottomTabInset, MaxContentWidth, Radius, Spacing, TopTabInset } from '@/constants/theme';
+import { BottomTabInset, MaxContentWidth, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { schoolName } from '@/lib/schools';
 import { useSession } from '@/lib/session';
@@ -50,7 +50,7 @@ export default function RidesScreen() {
         contentContainerStyle={[
           styles.listContent,
           {
-            paddingTop: insets.top + TopTabInset + Spacing.three,
+            paddingTop: insets.top + Spacing.three,
             paddingBottom: BottomTabInset + Spacing.six,
           },
         ]}
