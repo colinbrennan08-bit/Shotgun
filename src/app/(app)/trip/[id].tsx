@@ -4,6 +4,7 @@ import { Alert, Platform, StyleSheet, View } from 'react-native';
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
 import { RouteArc } from '@/components/route-arc';
+import { RouteMap, canMap } from '@/components/route-map';
 import { KindBadge } from '@/components/trip-card';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
@@ -12,6 +13,39 @@ import { dateOf, formatDepartRange, formatRelativeDay } from '@/lib/dates';
 import { contactLabel, formatHandle, seedContact, type Contact } from '@/lib/directory';
 import { useSession } from '@/lib/session';
 import { useTrips } from '@/lib/trips';
+import type { Trip } from '@/lib/types';
+
+/**
+ * One leg of the trip. Real map where both ends are known, the drawn arc where
+ * they are not, so an unrecognised destination degrades instead of breaking.
+ */
+function Leg({
+  origin,
+  destination,
+  kind,
+  meta,
+}: {
+  origin: string;
+  destination: string;
+  kind: Trip['kind'];
+  meta: string;
+}) {
+  if (!canMap(origin, destination)) {
+    return <RouteArc origin={origin} destination={destination} kind={kind} meta={meta} />;
+  }
+
+  return (
+    <View style={styles.leg}>
+      <RouteMap origin={origin} destination={destination} kind={kind} />
+      <ThemedText style={styles.legRoute}>
+        {origin} → {destination}
+      </ThemedText>
+      <ThemedText type="small" themeColor="textSecondary">
+        {meta}
+      </ThemedText>
+    </View>
+  );
+}
 
 /** Works on web too, where Alert.alert is a no-op and confirm() is not. */
 function confirmAction(title: string, message: string, onConfirm: () => void) {
@@ -75,7 +109,7 @@ export default function TripDetailScreen() {
               Heading out
             </ThemedText>
           ) : null}
-          <RouteArc
+          <Leg
             origin={trip.origin}
             destination={trip.destination}
             kind={trip.kind}
@@ -88,7 +122,7 @@ export default function TripDetailScreen() {
             <ThemedText type="smallBold" themeColor="textSecondary">
               Heading back
             </ThemedText>
-            <RouteArc
+            <Leg
               origin={trip.destination}
               destination={trip.origin}
               kind={trip.kind}
@@ -190,6 +224,16 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.three,
     alignItems: 'flex-start',
+    alignSelf: 'stretch',
+  },
+  leg: {
+    alignSelf: 'stretch',
+    gap: Spacing.one,
+  },
+  legRoute: {
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 24,
   },
   route: {
     fontSize: 28,
