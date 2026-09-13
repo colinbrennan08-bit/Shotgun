@@ -3,7 +3,7 @@ import { Alert, Platform, StyleSheet, View } from 'react-native';
 
 import { Screen } from '@/components/screen';
 import { ThemedText } from '@/components/themed-text';
-import { RouteLine } from '@/components/route-line';
+import { RouteArc } from '@/components/route-arc';
 import { KindBadge } from '@/components/trip-card';
 import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
@@ -75,7 +75,7 @@ export default function TripDetailScreen() {
               Heading out
             </ThemedText>
           ) : null}
-          <RouteLine
+          <RouteArc
             origin={trip.origin}
             destination={trip.destination}
             kind={trip.kind}
@@ -88,7 +88,7 @@ export default function TripDetailScreen() {
             <ThemedText type="smallBold" themeColor="textSecondary">
               Heading back
             </ThemedText>
-            <RouteLine
+            <RouteArc
               origin={trip.destination}
               destination={trip.origin}
               kind={trip.kind}

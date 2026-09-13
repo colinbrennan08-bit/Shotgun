@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 
-import { RouteLine } from '@/components/route-line';
+import { RouteArc } from '@/components/route-arc';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -67,7 +67,7 @@ export function TripCard({ trip, onPress }: { trip: Trip; onPress: () => void })
         </ThemedText>
       </View>
 
-      <RouteLine
+      <RouteArc
         origin={trip.origin}
         destination={trip.destination}
         kind={trip.kind}
