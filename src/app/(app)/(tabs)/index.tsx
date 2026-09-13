@@ -1,3 +1,4 @@
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
@@ -119,7 +120,7 @@ export default function RidesScreen() {
             opacity: pressed ? 0.85 : 1,
           },
         ]}>
-        <ThemedText style={[styles.fabLabel, { color: theme.onTint }]}>Post a trip</ThemedText>
+        <Ionicons name="add" size={30} color={theme.onTint} />
       </Pressable>
     </View>
   );
@@ -165,13 +166,16 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: Spacing.three,
-    minHeight: 52,
+    width: 56,
+    height: 56,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.four,
     borderRadius: Radius.pill,
-  },
-  fabLabel: {
-    fontSize: 16,
-    fontWeight: '700',
+    // A circle floating over cards needs to read as lifted off them.
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
 });
