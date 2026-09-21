@@ -13,11 +13,10 @@ import { useSession } from '@/lib/session';
 
 export default function SignInScreen() {
   const theme = useTheme();
-  const { requestCode, verifyCode, isLocalOnly } = useSession();
+  const { sendSignInLink, isLocalOnly } = useSession();
 
-  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [step, setStep] = useState<'email' | 'sent'>('email');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -29,32 +28,23 @@ export default function SignInScreen() {
     return check.ok ? check.school : null;
   }, [email]);
 
-  async function handleSendCode() {
+  async function handleSend() {
     setBusy(true);
     setError(null);
-    const result = await requestCode(email);
+    const result = await sendSignInLink(email);
     setBusy(false);
 
     if (!result.ok) {
       setError(result.message);
       return;
     }
-    // With no backend, requestCode already signed them in and the route guard
-    // takes over. Only the real flow has a second step.
-    if (!isLocalOnly) setStep('code');
-  }
-
-  async function handleVerify() {
-    setBusy(true);
-    setError(null);
-    const result = await verifyCode(email, code);
-    setBusy(false);
-    if (!result.ok) setError(result.message);
+    // With no backend this already signed them in and the route guard takes
+    // over. Only the real flow waits on an email.
+    if (!isLocalOnly) setStep('sent');
   }
 
   function handleStartOver() {
     setStep('email');
-    setCode('');
     setError(null);
   }
 
@@ -77,7 +67,7 @@ export default function SignInScreen() {
               setEmail(next);
               if (error) setError(null);
             }}
-            onSubmitEditing={handleSendCode}
+            onSubmitEditing={handleSend}
             autoCapitalize="none"
             autoCorrect={false}
             autoComplete="email"
@@ -93,43 +83,31 @@ export default function SignInScreen() {
           />
 
           <Button
-            label={isLocalOnly ? 'Continue' : 'Email me a code'}
-            onPress={handleSendCode}
+            label={isLocalOnly ? 'Continue' : 'Email me a sign-in link'}
+            onPress={handleSend}
             loading={busy}
             disabled={email.trim().length === 0}
           />
         </View>
       ) : (
         <View style={styles.form}>
+          <ThemedText style={styles.sentTitle}>Check your email</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            We sent a six-digit code to {email}. It expires in a few minutes.
+            We sent a sign-in link to {email}. Open it and you are in. The link expires
+            shortly, and it signs in whichever device you open it on, so use the one you want
+            to browse rides on.
+          </ThemedText>
+          <ThemedText type="small" themeColor="textSecondary">
+            Nothing after a minute or two? Check spam.
           </ThemedText>
 
-          <Field
-            label="Code"
-            placeholder="123456"
-            value={code}
-            onChangeText={(next) => {
-              setCode(next);
-              if (error) setError(null);
-            }}
-            onSubmitEditing={handleVerify}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="one-time-code"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            maxLength={8}
-            returnKeyType="go"
-            error={error ?? undefined}
-          />
+          {error ? (
+            <ThemedText type="small" style={{ color: theme.danger }}>
+              {error}
+            </ThemedText>
+          ) : null}
 
-          <Button
-            label="Sign in"
-            onPress={handleVerify}
-            loading={busy}
-            disabled={code.trim().length < 6}
-          />
+          <Button label="Send it again" onPress={handleSend} loading={busy} />
           <Button label="Use a different email" variant="secondary" onPress={handleStartOver} />
         </View>
       )}
@@ -179,6 +157,10 @@ const styles = StyleSheet.create({
   },
   form: {
     gap: Spacing.three,
+  },
+  sentTitle: {
+    fontSize: 22,
+    fontWeight: '700',
   },
   footer: {
     gap: Spacing.three,

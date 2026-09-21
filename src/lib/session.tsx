@@ -1,3 +1,4 @@
+import * as Linking from 'expo-linking';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { checkEmail, normalizeEmail } from './schools';
@@ -17,10 +18,16 @@ type SessionValue = {
    * device-local seed data, and the UI says so rather than pretending.
    */
   isLocalOnly: boolean;
-  /** Email a six-digit sign-in code. */
-  requestCode: (email: string) => Promise<AuthResult>;
-  /** Exchange that code for a session. */
-  verifyCode: (email: string, code: string) => Promise<AuthResult>;
+  /**
+   * Email a sign-in link.
+   *
+   * This was a six-digit code until Supabase turned out to gate email template
+   * editing behind custom SMTP, and the stock template sends a link. Rather
+   * than stand up an SMTP provider to change one line of HTML, the app follows
+   * the email. Switching back is this function plus the sign-in screen, once
+   * there is a real sender.
+   */
+  sendSignInLink: (email: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Omit<Profile, 'id' | 'email' | 'schoolId'>>) => Promise<void>;
 };
@@ -120,13 +127,16 @@ function RemoteSessionProvider({ children }: { children: ReactNode }) {
     };
   }, [loadProfile]);
 
-  const requestCode = useCallback(async (email: string): Promise<AuthResult> => {
+  const sendSignInLink = useCallback(async (email: string): Promise<AuthResult> => {
     const pre = preflight(email);
     if (!pre.ok) return pre;
 
+    // createURL resolves to the right place on every target: the deployed
+    // origin including the /Shotgun/ base path on web, and the shotgun://
+    // scheme on a device. Hardcoding it would break one of them.
     const { error } = await requireSupabase().auth.signInWithOtp({
       email: normalizeEmail(email),
-      options: { shouldCreateUser: true },
+      options: { shouldCreateUser: true, emailRedirectTo: Linking.createURL('/') },
     });
 
     if (error) {
@@ -136,23 +146,6 @@ function RemoteSessionProvider({ children }: { children: ReactNode }) {
         ? "That school isn't on Shotgun yet."
         : error.message;
       return { ok: false, message };
-    }
-    return { ok: true };
-  }, []);
-
-  const verifyCode = useCallback(async (email: string, code: string): Promise<AuthResult> => {
-    const { error } = await requireSupabase().auth.verifyOtp({
-      email: normalizeEmail(email),
-      token: code.trim(),
-      type: 'email',
-    });
-    if (error) {
-      return {
-        ok: false,
-        message: /expired|invalid/i.test(error.message)
-          ? 'That code is wrong or has expired. Try sending a new one.'
-          : error.message,
-      };
     }
     return { ok: true };
   }, []);
@@ -183,7 +176,7 @@ function RemoteSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext
-      value={{ profile, isLoading, isLocalOnly: false, requestCode, verifyCode, signOut, updateProfile }}>
+      value={{ profile, isLoading, isLocalOnly: false, sendSignInLink, signOut, updateProfile }}>
       {children}
     </SessionContext>
   );
@@ -226,7 +219,7 @@ function LocalSessionProvider({ children }: { children: ReactNode }) {
     else await removeItem(PROFILE_KEY);
   }, []);
 
-  const requestCode = useCallback(async (email: string): Promise<AuthResult> => {
+  const sendSignInLink = useCallback(async (email: string): Promise<AuthResult> => {
     const pre = preflight(email);
     if (!pre.ok) return pre;
 
@@ -245,9 +238,6 @@ function LocalSessionProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, [persist]);
 
-  // Nothing to verify: requestCode already signed them in.
-  const verifyCode = useCallback(async (): Promise<AuthResult> => ({ ok: true }), []);
-
   const signOut = useCallback(async () => {
     await persist(null);
   }, [persist]);
@@ -262,7 +252,7 @@ function LocalSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext
-      value={{ profile, isLoading, isLocalOnly: true, requestCode, verifyCode, signOut, updateProfile }}>
+      value={{ profile, isLoading, isLocalOnly: true, sendSignInLink, signOut, updateProfile }}>
       {children}
     </SessionContext>
   );
