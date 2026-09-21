@@ -1,0 +1,59 @@
+name: Deploy web to GitHub Pages
+
+# Every push to main republishes the site, so the link is never stale.
+# workflow_dispatch lets you redeploy by hand from the Actions tab.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never let two deploys race. Queue instead of cancelling, so the last push wins.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Export the web build
+        run: npx expo export --platform web
+        env:
+          # Pages serves this at /<repo>/, not at the domain root.
+          EXPO_BASE_URL: /${{ github.event.repository.name }}
+
+      - name: Disable Jekyll
+        # Pages runs Jekyll by default, and Jekyll skips any directory starting
+        # with an underscore. Expo puts every bundle in _expo/, so without this
+        # the page loads and then 404s on all of its own JavaScript.
+        run: touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
