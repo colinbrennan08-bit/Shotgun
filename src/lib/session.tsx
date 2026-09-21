@@ -19,15 +19,17 @@ type SessionValue = {
    */
   isLocalOnly: boolean;
   /**
-   * Email a sign-in link.
+   * Email a sign-in link and a six-digit code.
    *
-   * This was a six-digit code until Supabase turned out to gate email template
-   * editing behind custom SMTP, and the stock template sends a link. Rather
-   * than stand up an SMTP provider to change one line of HTML, the app follows
-   * the email. Switching back is this function plus the sign-in screen, once
-   * there is a real sender.
+   * Supabase sends one message containing both, so the app accepts either and
+   * does not care which the user reaches for. That matters because the code
+   * only appears once the email template includes {{ .Token }}, and editing
+   * templates requires custom SMTP. Before that is set up the mail is
+   * link-only; after it, the code works too. Neither state breaks the other.
    */
   sendSignInLink: (email: string) => Promise<AuthResult>;
+  /** Exchange a code from that email for a session. */
+  verifyCode: (email: string, code: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Omit<Profile, 'id' | 'email' | 'schoolId'>>) => Promise<void>;
 };
@@ -150,6 +152,24 @@ function RemoteSessionProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, []);
 
+  const verifyCode = useCallback(async (email: string, code: string): Promise<AuthResult> => {
+    // Same one-time token the link carries, just typed in instead of clicked.
+    const { error } = await requireSupabase().auth.verifyOtp({
+      email: normalizeEmail(email),
+      token: code.trim(),
+      type: 'email',
+    });
+    if (error) {
+      return {
+        ok: false,
+        message: /expired|invalid|token/i.test(error.message)
+          ? 'That code is wrong or has expired. Send a new one.'
+          : error.message,
+      };
+    }
+    return { ok: true };
+  }, []);
+
   const signOut = useCallback(async () => {
     await requireSupabase().auth.signOut();
     setProfile(null);
@@ -176,7 +196,10 @@ function RemoteSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext
-      value={{ profile, isLoading, isLocalOnly: false, sendSignInLink, signOut, updateProfile }}>
+      value={{
+        profile, isLoading, isLocalOnly: false,
+        sendSignInLink, verifyCode, signOut, updateProfile,
+      }}>
       {children}
     </SessionContext>
   );
@@ -238,6 +261,9 @@ function LocalSessionProvider({ children }: { children: ReactNode }) {
     return { ok: true };
   }, [persist]);
 
+  // Nothing to verify: sendSignInLink already signed them in.
+  const verifyCode = useCallback(async (): Promise<AuthResult> => ({ ok: true }), []);
+
   const signOut = useCallback(async () => {
     await persist(null);
   }, [persist]);
@@ -252,7 +278,10 @@ function LocalSessionProvider({ children }: { children: ReactNode }) {
 
   return (
     <SessionContext
-      value={{ profile, isLoading, isLocalOnly: true, sendSignInLink, signOut, updateProfile }}>
+      value={{
+        profile, isLoading, isLocalOnly: true,
+        sendSignInLink, verifyCode, signOut, updateProfile,
+      }}>
       {children}
     </SessionContext>
   );

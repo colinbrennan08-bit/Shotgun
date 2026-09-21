@@ -13,10 +13,11 @@ import { useSession } from '@/lib/session';
 
 export default function SignInScreen() {
   const theme = useTheme();
-  const { sendSignInLink, isLocalOnly } = useSession();
+  const { sendSignInLink, verifyCode, isLocalOnly } = useSession();
 
   const [step, setStep] = useState<'email' | 'sent'>('email');
   const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,8 +44,17 @@ export default function SignInScreen() {
     if (!isLocalOnly) setStep('sent');
   }
 
+  async function handleVerify() {
+    setBusy(true);
+    setError(null);
+    const result = await verifyCode(email, code);
+    setBusy(false);
+    if (!result.ok) setError(result.message);
+  }
+
   function handleStartOver() {
     setStep('email');
+    setCode('');
     setError(null);
   }
 
@@ -93,21 +103,37 @@ export default function SignInScreen() {
         <View style={styles.form}>
           <ThemedText style={styles.sentTitle}>Check your email</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            We sent a sign-in link to {email}. Open it and you are in. The link expires
-            shortly, and it signs in whichever device you open it on, so use the one you want
-            to browse rides on.
-          </ThemedText>
-          <ThemedText type="small" themeColor="textSecondary">
-            Nothing after a minute or two? Check spam.
+            We sent a sign-in email to {email}. Type the code below, or just tap the link in
+            the message. Either works.
           </ThemedText>
 
-          {error ? (
-            <ThemedText type="small" style={{ color: theme.danger }}>
-              {error}
-            </ThemedText>
-          ) : null}
+          <Field
+            label="Code"
+            placeholder="123456"
+            value={code}
+            onChangeText={(next) => {
+              setCode(next);
+              if (error) setError(null);
+            }}
+            onSubmitEditing={handleVerify}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="one-time-code"
+            keyboardType="number-pad"
+            inputMode="numeric"
+            maxLength={8}
+            returnKeyType="go"
+            error={error ?? undefined}
+            hint="No code in the email? Tap the link instead."
+          />
 
-          <Button label="Send it again" onPress={handleSend} loading={busy} />
+          <Button
+            label="Sign in"
+            onPress={handleVerify}
+            loading={busy}
+            disabled={code.trim().length < 6}
+          />
+          <Button label="Send it again" variant="secondary" onPress={handleSend} />
           <Button label="Use a different email" variant="secondary" onPress={handleStartOver} />
         </View>
       )}
