@@ -30,14 +30,31 @@ jobs:
 
       - run: npm ci
 
+      - name: Work out the base path
+        id: base
+        # Pages serves a project site from /<repo>/, but a custom domain serves
+        # from the root. Getting this wrong is a blank page either way, so it is
+        # derived from whether a CNAME exists rather than remembered.
+        run: |
+          if [ -f CNAME ]; then
+            echo "Custom domain: $(cat CNAME), building for the root"
+            echo "value=" >> "$GITHUB_OUTPUT"
+          else
+            echo "No CNAME, building for /${{ github.event.repository.name }}"
+            echo "value=/${{ github.event.repository.name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Export the web build
         run: npx expo export --platform web
         env:
-          # Pages serves this at /<repo>/, not at the domain root.
-          EXPO_BASE_URL: /${{ github.event.repository.name }}
+          EXPO_BASE_URL: ${{ steps.base.outputs.value }}
           # Supabase config comes from the committed .env. Do not set those
           # two vars here: an unset repository variable expands to an empty
           # string, which would override the file and quietly ship demo mode.
+
+      - name: Carry the custom domain into the build
+        # Pages reads this file from the published output, not the repo root.
+        run: if [ -f CNAME ]; then cp CNAME dist/CNAME; fi
 
       - name: Disable Jekyll
         # Pages runs Jekyll by default, and Jekyll skips any directory starting
