@@ -35,6 +35,14 @@ jobs:
         env:
           # Pages serves this at /<repo>/, not at the domain root.
           EXPO_BASE_URL: /${{ github.event.repository.name }}
+          # Repository *variables*, not secrets, and deliberately so: both of
+          # these end up readable in the published JavaScript no matter where
+          # they are stored. The anon key is designed for that. What a holder
+          # of it can actually do is decided by the row-level security policies
+          # in supabase/schema.sql. Leave them unset and the site builds in
+          # demo mode instead of failing.
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
 
       - name: Disable Jekyll
         # Pages runs Jekyll by default, and Jekyll skips any directory starting

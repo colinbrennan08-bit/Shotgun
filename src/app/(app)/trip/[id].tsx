@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { dateOf, formatDepartRange, formatRelativeDay } from '@/lib/dates';
-import { contactLabel, formatHandle, seedContact, type Contact } from '@/lib/directory';
+import { useAuthorContact } from '@/hooks/use-author-contact';
+import { contactLabel, formatHandle, type Contact } from '@/lib/directory';
 import { useSession } from '@/lib/session';
 import { useTrips } from '@/lib/trips';
 import type { Trip } from '@/lib/types';
@@ -68,6 +69,12 @@ export default function TripDetailScreen() {
 
   const trip = getTrip(id);
 
+  // Computed before the early return below, because the contact lookup is a
+  // hook and hooks cannot sit behind a conditional return.
+  const mine = Boolean(trip && profile && trip.authorId === profile.id);
+  const joined = Boolean(trip && hasJoined(trip.id));
+  const authorContact = useAuthorContact(trip?.authorId ?? null, joined && !mine);
+
   if (!trip || !profile) {
     return (
       <Screen>
@@ -80,12 +87,10 @@ export default function TripDetailScreen() {
     );
   }
 
-  const mine = trip.authorId === profile.id;
-  const joined = hasJoined(trip.id);
   const roundTrip = trip.returnStart !== null && trip.returnEnd !== null;
   const contact: Contact | null = mine
     ? { method: profile.contactMethod, handle: profile.contactHandle }
-    : seedContact(trip.authorId);
+    : authorContact;
 
   // Date and departure window live on the route graphic, so they are not repeated here.
   const facts = [

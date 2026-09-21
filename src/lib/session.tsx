@@ -2,16 +2,25 @@ import { createContext, use, useCallback, useEffect, useState, type ReactNode } 
 
 import { checkEmail, normalizeEmail } from './schools';
 import { getItem, removeItem, setItem } from './storage';
+import { isConfigured, requireSupabase } from './supabase';
 import type { ContactMethod, Profile } from './types';
 
 const PROFILE_KEY = 'shotgun.profile.v1';
 
-export type SignInResult = { ok: true } | { ok: false; message: string };
+export type AuthResult = { ok: true } | { ok: false; message: string };
 
 type SessionValue = {
   profile: Profile | null;
   isLoading: boolean;
-  signIn: (email: string) => Promise<SignInResult>;
+  /**
+   * True when no Supabase project is configured. The app still runs, on
+   * device-local seed data, and the UI says so rather than pretending.
+   */
+  isLocalOnly: boolean;
+  /** Email a six-digit sign-in code. */
+  requestCode: (email: string) => Promise<AuthResult>;
+  /** Exchange that code for a session. */
+  verifyCode: (email: string, code: string) => Promise<AuthResult>;
   signOut: () => Promise<void>;
   updateProfile: (patch: Partial<Omit<Profile, 'id' | 'email' | 'schoolId'>>) => Promise<void>;
 };
@@ -24,7 +33,7 @@ export function useSession(): SessionValue {
   return value;
 }
 
-/** Everything before the `@`, tidied into something usable as a default display name. */
+/** Everything before the `@`, tidied into something usable as a display name. */
 function nameFromEmail(email: string): string {
   const local = email.slice(0, email.indexOf('@'));
   const cleaned = local.replace(/[._\-0-9]+/g, ' ').trim();
@@ -35,7 +44,160 @@ function nameFromEmail(email: string): string {
     .join(' ');
 }
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+/**
+ * Turn the client-side domain check into a message worth reading.
+ *
+ * This runs before the network call purely for the error text. The real gate is
+ * a trigger on auth.users in the database, because anything checked only here
+ * can be skipped by talking to the API directly.
+ */
+function preflight(email: string): AuthResult {
+  const check = checkEmail(email);
+  if (check.ok) return { ok: true };
+  switch (check.reason) {
+    case 'empty':
+      return { ok: false, message: 'Enter your school email.' };
+    case 'malformed':
+      return { ok: false, message: "That doesn't look like an email address." };
+    case 'not-edu':
+      return { ok: false, message: 'Shotgun needs a school (.edu) email address.' };
+    case 'unsupported-school':
+      return { ok: false, message: "That school isn't on Shotgun yet." };
+  }
+}
+
+// ------------------------------------------------------------------ remote
+
+function RemoteSessionProvider({ children }: { children: ReactNode }) {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadProfile = useCallback(async (userId: string) => {
+    const supabase = requireSupabase();
+
+    // Contact lives in its own table so RLS can gate it. Reading your own is
+    // always allowed; this is that case.
+    const [{ data: row }, { data: contact }] = await Promise.all([
+      supabase.from('profiles').select('id, email, school_id, display_name').eq('id', userId).single(),
+      supabase.from('profile_contacts').select('method, handle').eq('user_id', userId).single(),
+    ]);
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      email: row.email,
+      schoolId: row.school_id,
+      displayName: row.display_name,
+      contactMethod: (contact?.method ?? 'instagram') as ContactMethod,
+      contactHandle: contact?.handle ?? '',
+    } satisfies Profile;
+  }, []);
+
+  useEffect(() => {
+    const supabase = requireSupabase();
+    let cancelled = false;
+
+    supabase.auth.getSession().then(async ({ data }) => {
+      const userId = data.session?.user.id;
+      const next = userId ? await loadProfile(userId) : null;
+      if (cancelled) return;
+      setProfile(next);
+      setIsLoading(false);
+    });
+
+    // Fires on sign-in, sign-out, and token refresh, so the UI follows the
+    // session rather than the other way round.
+    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const userId = session?.user.id;
+      const next = userId ? await loadProfile(userId) : null;
+      if (!cancelled) setProfile(next);
+    });
+
+    return () => {
+      cancelled = true;
+      sub.subscription.unsubscribe();
+    };
+  }, [loadProfile]);
+
+  const requestCode = useCallback(async (email: string): Promise<AuthResult> => {
+    const pre = preflight(email);
+    if (!pre.ok) return pre;
+
+    const { error } = await requireSupabase().auth.signInWithOtp({
+      email: normalizeEmail(email),
+      options: { shouldCreateUser: true },
+    });
+
+    if (error) {
+      // The database trigger rejects unknown domains, and that surfaces here as
+      // a server error rather than anything readable.
+      const message = /domain|school/i.test(error.message)
+        ? "That school isn't on Shotgun yet."
+        : error.message;
+      return { ok: false, message };
+    }
+    return { ok: true };
+  }, []);
+
+  const verifyCode = useCallback(async (email: string, code: string): Promise<AuthResult> => {
+    const { error } = await requireSupabase().auth.verifyOtp({
+      email: normalizeEmail(email),
+      token: code.trim(),
+      type: 'email',
+    });
+    if (error) {
+      return {
+        ok: false,
+        message: /expired|invalid/i.test(error.message)
+          ? 'That code is wrong or has expired. Try sending a new one.'
+          : error.message,
+      };
+    }
+    return { ok: true };
+  }, []);
+
+  const signOut = useCallback(async () => {
+    await requireSupabase().auth.signOut();
+    setProfile(null);
+  }, []);
+
+  const updateProfile = useCallback(
+    async (patch: Partial<Omit<Profile, 'id' | 'email' | 'schoolId'>>) => {
+      if (!profile) return;
+      const supabase = requireSupabase();
+      const next = { ...profile, ...patch };
+
+      await Promise.all([
+        supabase.from('profiles').update({ display_name: next.displayName }).eq('id', profile.id),
+        supabase
+          .from('profile_contacts')
+          .update({ method: next.contactMethod, handle: next.contactHandle })
+          .eq('user_id', profile.id),
+      ]);
+
+      setProfile(next);
+    },
+    [profile]
+  );
+
+  return (
+    <SessionContext
+      value={{ profile, isLoading, isLocalOnly: false, requestCode, verifyCode, signOut, updateProfile }}>
+      {children}
+    </SessionContext>
+  );
+}
+
+// ------------------------------------------------------------------- local
+
+/**
+ * No backend configured. Signs anyone with a supported domain straight in and
+ * keeps everything on the device, so a fresh checkout and the published demo
+ * both still work. The sign-in screen says plainly that this is what is
+ * happening; it is a demo mode, not authentication.
+ */
+function LocalSessionProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -64,39 +226,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     else await removeItem(PROFILE_KEY);
   }, []);
 
-  const signIn = useCallback(
-    async (email: string): Promise<SignInResult> => {
-      const check = checkEmail(email);
-      if (!check.ok) {
-        switch (check.reason) {
-          case 'empty':
-            return { ok: false, message: 'Enter your school email.' };
-          case 'malformed':
-            return { ok: false, message: "That doesn't look like an email address." };
-          case 'not-edu':
-            return { ok: false, message: 'Shotgun needs a school (.edu) email address.' };
-          case 'unsupported-school':
-            return { ok: false, message: "That school isn't on Shotgun yet." };
-        }
-      }
+  const requestCode = useCallback(async (email: string): Promise<AuthResult> => {
+    const pre = preflight(email);
+    if (!pre.ok) return pre;
 
-      // TODO(auth): this is a stub. Real sign-in is a Supabase email OTP, which
-      // makes this function `signInWithOtp` + a verify step. The domain check
-      // stays here AND is enforced again server-side, since anything client-side
-      // is advisory only.
-      const normalized = normalizeEmail(email);
-      await persist({
-        id: `local-${normalized}`,
-        email: normalized,
-        schoolId: check.school.id,
-        displayName: nameFromEmail(normalized),
-        contactMethod: 'instagram',
-        contactHandle: '',
-      });
-      return { ok: true };
-    },
-    [persist]
-  );
+    const normalized = normalizeEmail(email);
+    const school = checkEmail(normalized);
+    if (!school.ok) return pre;
+
+    await persist({
+      id: `local-${normalized}`,
+      email: normalized,
+      schoolId: school.school.id,
+      displayName: nameFromEmail(normalized),
+      contactMethod: 'instagram',
+      contactHandle: '',
+    });
+    return { ok: true };
+  }, [persist]);
+
+  // Nothing to verify: requestCode already signed them in.
+  const verifyCode = useCallback(async (): Promise<AuthResult> => ({ ok: true }), []);
 
   const signOut = useCallback(async () => {
     await persist(null);
@@ -111,9 +261,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <SessionContext value={{ profile, isLoading, signIn, signOut, updateProfile }}>
+    <SessionContext
+      value={{ profile, isLoading, isLocalOnly: true, requestCode, verifyCode, signOut, updateProfile }}>
       {children}
     </SessionContext>
+  );
+}
+
+/**
+ * `isConfigured` is a module constant read from the build's env, so this branch
+ * is fixed for the life of the process and never reorders a hook.
+ */
+export function SessionProvider({ children }: { children: ReactNode }) {
+  return isConfigured ? (
+    <RemoteSessionProvider>{children}</RemoteSessionProvider>
+  ) : (
+    <LocalSessionProvider>{children}</LocalSessionProvider>
   );
 }
 
